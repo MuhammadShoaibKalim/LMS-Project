@@ -1,29 +1,12 @@
-import dotenv from 'dotenv';
-import express, { Request, Response, NextFunction } from 'express';
-export const app =express();
-import cookieParser from 'cookie-parser';
-import cors from 'cors';
+import { app } from "./server"; 
+import connectDB from "./utils/db"; 
+import dotenv from "dotenv";
 
 dotenv.config();
-app.use(express.json({limit:"50mb"}));
 
-app.use(cookieParser());
+const PORT = process.env.PORT || 4000;
 
-app.use(cors({origin: process.env.ORIGIN, credentials: true}));
-
-app.get("/", (req:Request, res:Response, next:NextFunction) => {
-    res.status(200)
-    .json({
-        success:true,
-        message:"Welcome to the API",
-    })
-});     
-
-
-
-app.all("*", (req:Request, res:Response, next:NextFunction) => {
-    const err= new Error("Page Not Found");
-    // err.statusCode = 404;
-    next(err);
-
-});    
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+    connectDB(); // Connect to MongoDB
+});
