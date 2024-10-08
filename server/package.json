@@ -1,10 +1,10 @@
 {
   "name": "type",
   "version": "1.0.0",
-  "main": "app.js",
+  "main": "server.js",
   "scripts": {
-    "start": "nodemon --exec ts-node --transpile-only app.ts",
-    "dev": "nodemon --exec ts-node --transpile-only app.ts",
+    "start": "nodemon --exec ts-node --transpile-only server.ts",
+    "dev": "nodemon --exec ts-node --transpile-only server.ts",
     "build": "tsc -p ."
   },
   "keywords": [],
