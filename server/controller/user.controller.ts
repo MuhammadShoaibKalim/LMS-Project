@@ -14,6 +14,7 @@ interface IRegistrationBody {
 }
 
 export const registerationUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+
     const { name, email, password } = req.body;
     const isEmailExist = await userModel.findOne({ email });
 
@@ -40,9 +41,12 @@ interface IActivationToken {
 export const createActivationToken = (user: IRegistrationBody): IActivationToken => { 
     const activationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    const token = jwt.sign({ user, activationCode }, process.env.ACTIVATION_SECRET, {
-        expiresIn: "10m",
-    });
+    const token = jwt.sign(
+      { user: { name: user.name, email: user.email }, activationCode }, 
+      process.env.ACTIVATION_SECRET as string, 
+      { expiresIn: "10m" }
+    );
+    
 
     return { token, activationCode };
 };
