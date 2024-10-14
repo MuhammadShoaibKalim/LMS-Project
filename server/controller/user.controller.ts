@@ -4,6 +4,9 @@ import { catchAsyncError } from "../middleware/catchAsyncError";
 import ErrorHandler  from "../utils/ErrorHandler";
 import jwt from "jsonwebtoken";
 import ejs from "ejs";
+import path from "path"
+import sendMail from "../utils/sendMail";
+
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -34,7 +37,27 @@ export const registerationUser = catchAsyncError(async (req: Request, res: Respo
       const activationCode = activationToken.activationCode;
 
       const data = { user: { name: user.name}, activationCode };
+      const html = await ejs.renderFile(path.join(__dirname,"../mail/activation-mail.ejs"), data);
+      try {
+            await sendMail({
+            email: user.email,
+            subject: "Account Activation",
+            template: "activation-mail.ejs",
+            data,
+            });
 
+            res.status(201).json({
+            success: true,
+            message: "Account registered successfully. Please check your email to activate your account",
+            activationToken:activationToken.token,
+            });
+
+
+      } catch (error:any) {
+            return next( new ErrorHandler(error.message, 400));
+      } 
+
+        
 
       } catch (error:any) {
         return next(new ErrorHandler(error.message, 500));
