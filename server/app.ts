@@ -3,10 +3,11 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import {errorMiddleware} from './middleware/errors';
 import userRouter from './routes/user.routes';
-
+// import registerUserController from './routes/user.routes';
 
 import dotenv from 'dotenv';
 dotenv.config();
+
  
 export const app = express();
  
@@ -15,6 +16,8 @@ app.use(cookieParser());
 app.use(cors({ origin: process.env.ORIGIN, credentials: true }));
 
 app.use("/api/v1", userRouter);
+
+// userRouter.post("/registration", registerUserController);
 
 app.get("/", (req: Request, res: Response, next: NextFunction) => {
     res.status(200).json({
@@ -25,12 +28,17 @@ app.get("/", (req: Request, res: Response, next: NextFunction) => {
 
   
 
+// app.all("*", (req: Request, res: Response, next: NextFunction) => {
+//    const err= new Error(`Can't find ${req.originalUrl} on this server`);
+//     res.status(404);
+//     next(err);
+
+// }); 
 app.all("*", (req: Request, res: Response, next: NextFunction) => {
-   const err= new Error(`Can't find ${req.originalUrl} on this server`);
+    const err = new Error(`Can't find ${req.originalUrl} on this server`);
     res.status(404);
     next(err);
-
-}); 
+});
 
 
 app.use(errorMiddleware);
