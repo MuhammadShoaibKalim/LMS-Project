@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from "express";
+
 import userModel, { IUser } from "../models/user.model";
 import { catchAsyncError } from "../middleware/catchAsyncError";
 import ErrorHandler from "../utils/ErrorHandler";
@@ -7,7 +8,7 @@ import ejs from "ejs";
 import path from "path";
 import sendMail from "../utils/sendMail";
 import dotenv from "dotenv";
-
+import { sendToken } from "../utils/jwt";
 dotenv.config();
 
 interface IRegistrationBody {
@@ -15,6 +16,7 @@ interface IRegistrationBody {
     email: string;
     password?: string;
     avatar?: string;
+    
 }
 export const registerationUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -135,3 +137,56 @@ export const activateUser = catchAsyncError(async (req: Request, res: Response, 
         return next(new ErrorHandler(error.message, 500));
     }
 });
+
+//Login user
+interface ILoginRequest {
+    email:string;
+    password:string;
+}
+
+
+export const loginUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+   try {
+       const { email, password } = req.body as ILoginRequest;
+       
+       if (!email || !password) {
+        return next(new ErrorHandler("Please enter email and password", 400));
+    }
+
+    const user = await userModel.findOne({ email }).select("+password");
+
+    if (!user) {
+        return next(new ErrorHandler("Invalid email or password", 401));
+    }
+
+    const isPasswordMatched = await user.comparePassword(password);
+
+    if (!isPasswordMatched) {
+        return next(new ErrorHandler("Invalid email or password", 401));
+    }
+      
+    sendToken(user, 200, res);
+
+
+   } catch (error:any) {
+    return next(new ErrorHandler(error.message, 500));
+   }
+});
+
+
+/*
+
+
+    // Create access token
+    const accessToken = user.SignAcessToken();
+
+    // Create refresh token
+    const refreshToken = user.SignRefreshToken();
+
+    res.status(200).json({
+        success: true,
+        message: "User logged in successfully.",
+        accessToken,
+        refreshToken,
+    });
+*/ 

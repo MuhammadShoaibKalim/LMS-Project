@@ -1,20 +1,26 @@
 import mongoose, { Document, Model, Schema } from "mongoose";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
+import { dot } from "node:test/reporters";
+dotenv.config();
 
 const EmailRegexPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
 export interface IUser extends Document {
     name: string;
     email: string;
-    password?: string; // Make password optional
+    password?: string; 
     avatar?: {
-        public_id?: string; // Make public_id optional
-        url?: string; // Make url optional
+        public_id?: string; 
+        url?: string; 
     };
     role: string;
     isVerified: boolean;
     courses: Array<{ courseId: string }>;
     comparePassword: (password: string) => Promise<boolean>;
+    SignAcessToken: ()=> string;
+    SignRefreshToken: ()=> string;
 }
 
 const userSchema = new Schema<IUser>(
@@ -32,7 +38,7 @@ const userSchema = new Schema<IUser>(
         },
         password: {
             type: String,
-            required: [false], // Change to false
+            required: false, 
             minlength: [6, "Your password must be longer than 6 characters"],
             select: false,
         },
@@ -73,6 +79,16 @@ userSchema.pre<IUser>("save", async function (next) {
     }
     this.password = await bcrypt.hash(this.password, 10);
 });
+
+//sign access token
+userSchema.methods.SignAcessToken = function(){
+    return jwt.sign({id:this._id},process.env.ACCESS_TOKEN || " ");
+    };
+//sign refresh token
+userSchema.methods.SignRefreshToken = function(){
+    return jwt.sign({id:this._id},process.env.REFRESH || " ");
+};
+
 
 // Compare user password
 userSchema.methods.comparePassword = async function (enteredPassword: string) {
