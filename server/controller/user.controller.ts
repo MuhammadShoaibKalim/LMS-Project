@@ -13,13 +13,12 @@ dotenv.config();
 interface IRegistrationBody {
     name: string;
     email: string;
-    password: string;
+    password?: string;
     avatar?: string;
 }
-
 export const registerationUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, email } = req.body; // Removed password from here
         const isEmailExist = await userModel.findOne({ email });
 
         if (isEmailExist) {
@@ -29,20 +28,19 @@ export const registerationUser = catchAsyncError(async (req: Request, res: Respo
         const user: IRegistrationBody = {
             name,
             email,
-            password,
         };
 
         // Create activation token
         const activationToken = createActivationToken(user);
-        
+
         // Create the activation link
         const activationLink = `${process.env.ORIGIN}/activate?token=${activationToken.token}`;
 
         // Prepare the email data including activation link
-        const data = { 
-            user: { name: user.name }, 
-            activationCode: activationToken.activationCode, 
-            activationLink 
+        const data = {
+            user: { name: user.name },
+            activationCode: activationToken.activationCode,
+            activationLink,
         };
 
         // Render the email template with the activation link
@@ -54,7 +52,7 @@ export const registerationUser = catchAsyncError(async (req: Request, res: Respo
                 email: user.email,
                 subject: "Account Activation",
                 template: "activation-mail.ejs",
-                data, 
+                data,
             });
 
             res.status(201).json({
@@ -76,7 +74,7 @@ interface IActivationToken {
 }
 
 export const createActivationToken = (user: any): IActivationToken => {
-    // console.log("ACTIVATION_SECRET:", process.env.ACTIVATION_SECRET); 
+    console.log("ACTIVATION_SECRET:", process.env.ACTIVATION_SECRET); 
     
     const activationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -92,3 +90,48 @@ export const createActivationToken = (user: any): IActivationToken => {
 
     return { token, activationCode };
 }
+
+// Activate user 
+interface IActivationRequest{
+    activation_token:string,
+    activation_code:string,
+
+}
+export const activateUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { activation_code, activation_token } = req.body as IActivationRequest;
+
+        // Verify the activation token
+        const newUser = jwt.verify(
+            activation_token,
+            process.env.ACTIVATION_SECRET as string
+        ) as { user: IUser; activationCode: string };
+
+        // Check if the activation code matches
+        if (newUser.activationCode !== activation_code) {
+            return next(new ErrorHandler("Invalid activation code", 400));
+        }
+
+        const { name, email } = newUser.user; // Omit password and avatar here
+        const existUser = await userModel.findOne({ email });
+
+        if (existUser) {
+            return next(new ErrorHandler("Email already exists.", 400));
+        }
+
+        // Create new user in the database without password and avatar
+        const user = await userModel.create({
+            name,
+            email,
+            // No password or avatar fields included
+        });
+
+        res.status(201).json({
+            success: true,
+            message: "User activated successfully.",
+        });
+
+    } catch (error: any) {
+        return next(new ErrorHandler(error.message, 500));
+    }
+});

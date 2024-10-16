@@ -3,7 +3,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import {errorMiddleware} from './middleware/errors';
 import userRouter from './routes/user.routes';
-// import registerUserController from './routes/user.routes';
+
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -17,7 +17,7 @@ app.use(cors({ origin: process.env.ORIGIN, credentials: true }));
 
 app.use("/api/v1", userRouter);
 
-// userRouter.post("/registration", registerUserController);
+// activate-user
 
 app.get("/", (req: Request, res: Response, next: NextFunction) => {
     res.status(200).json({
