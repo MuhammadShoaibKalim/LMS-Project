@@ -174,19 +174,6 @@ export const loginUser = catchAsyncError(async (req: Request, res: Response, nex
 });
 
 
-/*
-
-
-    // Create access token
-    const accessToken = user.SignAcessToken();
-
-    // Create refresh token
-    const refreshToken = user.SignRefreshToken();
-
-    res.status(200).json({
-        success: true,
-        message: "User logged in successfully.",
-        accessToken,
-        refreshToken,
-    });
-*/ 
+export const logoutUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => { 
+   
+});

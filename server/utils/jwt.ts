@@ -18,13 +18,12 @@ export const sendToken = (user: IUser, statusCode: number, res: Response, option
     const refreshToken = user.SignRefreshToken();
 
     //upload session to redis 
-    // redis.set(user._id, JSON.stringify(user) as any); 
+    redis.set(user._id, JSON.stringify(user) as any);
 
-
-
+ 
     // Parse environment variables
-    const accessTokenExpires = parseInt(process.env.ACCESS_TOKEN_EXPIRE || '300', 10); // in seconds
-    const refreshTokenExpires = parseInt(process.env.REFRESH_TOKEN_EXPIRE || '1200', 10); // in seconds
+    const accessTokenExpires = parseInt(process.env.ACCESS_TOKEN_EXPIRE || '300', 10); 
+    const refreshTokenExpires = parseInt(process.env.REFRESH_TOKEN_EXPIRE || '1200', 10); 
 
     // Set cookie options for access token
     const accessTokenOptions: ITokenOptions = {
@@ -32,7 +31,7 @@ export const sendToken = (user: IUser, statusCode: number, res: Response, option
         maxAge: accessTokenExpires * 1000,
         httpOnly: true,
         sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production', // Only secure in production
+        secure: process.env.NODE_ENV === 'production', 
     };
 
     // Set cookie options for refresh token
@@ -41,7 +40,7 @@ export const sendToken = (user: IUser, statusCode: number, res: Response, option
         maxAge: refreshTokenExpires * 1000,
         httpOnly: true,
         sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production', // Only secure in production
+        secure: process.env.NODE_ENV === 'production', 
     };
 
     // Set the cookies for accessToken and refreshToken
@@ -55,4 +54,5 @@ export const sendToken = (user: IUser, statusCode: number, res: Response, option
         accessToken,
         refreshToken,
     });
+
 };

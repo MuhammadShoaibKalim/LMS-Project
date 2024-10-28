@@ -28,6 +28,7 @@ app.get("/", (req: Request, res: Response, next: NextFunction) => {
 
   
 
+
 // app.all("*", (req: Request, res: Response, next: NextFunction) => {
 //    const err= new Error(`Can't find ${req.originalUrl} on this server`);
 //     res.status(404);

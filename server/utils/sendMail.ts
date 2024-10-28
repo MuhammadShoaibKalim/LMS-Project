@@ -1,8 +1,8 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import ejs from 'ejs';
 import path from 'path';
+import fs from 'fs';  
 import dotenv from "dotenv";
-
 
 dotenv.config();
 
@@ -10,13 +10,13 @@ dotenv.config();
 interface EmailOptions {
     email: string;
     subject: string;
-    template: string;
+    template: string; 
     data: { [key: string]: any }; 
 }
 
 // Function to create the transporter for sending emails
 const createTransporter = (): Transporter => {
-    const transporter = nodemailer.createTransport({
+    return nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'smtp.gmail.com',
         port: parseInt(process.env.SMTP_PORT || '587'),
         secure: process.env.SMTP_SECURE === 'true', 
@@ -27,8 +27,6 @@ const createTransporter = (): Transporter => {
         logger: true, 
         debug: true, 
     });
-
-    return transporter;
 };
 
 // Function to send email
@@ -37,16 +35,31 @@ const sendMail = async (options: EmailOptions): Promise<void> => {
 
     const { email, subject, template, data } = options;
 
-    // Get the mail template path
-const templatePath = path.join(__dirname, "../mail", `${template}`);
-    console.log("Template Path:", templatePath);
+    // Use __dirname to resolve the template path
+    const templatePath = path.resolve(__dirname, "../mail", `${template}`);
+    console.log("Template Path:", templatePath);    
+    console.log("__dirname:", __dirname);
+    console.log("Checking for template file...");
+    
+    // Check if template file exists
+    const templateExists = fs.existsSync(templatePath);
+    console.log("Template exists:", templateExists);
+
+  
+ 
+
+    
+    if (!templateExists) {
+        console.error("Template file not found. Please check the file name and path.");
+        throw new Error("Template file does not exist at the path: " + templatePath);
+    }
 
     try {
         // Render the email template with ejs
-        const html: string = await ejs.renderFile(templatePath, data);
+        const html: string = await ejs.renderFile(templatePath, data); 
 
         const mailOptions = {
-            from: process.env.SMTP_MAIL || process.env.GMAIL_USER,
+            from: process.env.SMTP_MAIL || process.env.GMAIL_USER, 
             to: email,
             subject,
             html,
@@ -59,7 +72,6 @@ const templatePath = path.join(__dirname, "../mail", `${template}`);
         console.error("Error sending email:", error.message); 
         throw new Error("Email sending failed: " + error.message); 
     }
-}; 
+};
 
-export default sendMail;  
-
+export default sendMail;
