@@ -174,14 +174,42 @@ export const loginUser = catchAsyncError(async (req: Request, res: Response, nex
 });
 
 
+// export const logoutUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => { 
+//      try {
+//           res.cookie("access token success", " ", {maxAge:1});
+//           res.cookie("refresh token success", " ", {maxAge:1});
+//             res.status(200).json({
+//                 success:true,
+//                 message:"Logged out successfully"});
+//      } catch (error:any) {
+//         return next(new ErrorHandler(error.message, 400));
+//        }
+// });
+
+
 export const logoutUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => { 
-     try {
-          res.cookie("access token success", " ", {maxAge:1});
-          res.cookie("r4efresh token success", " ", {maxAge:1});
-            res.status(200).json({
-                success:true,
-                message:"Logged out successfully"});
-     } catch (error:any) {
+    try {
+        // Clear access token cookie
+        res.cookie("access_token", "", { 
+            httpOnly: true,
+            expires: new Date(0),  // Expire immediately
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'  // Secure flag for production
+        });
+
+        // Clear refresh token cookie
+        res.cookie("refresh_token", "", { 
+            httpOnly: true,
+            expires: new Date(0),  // Expire immediately
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'  // Secure flag for production
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Logged out successfully"
+        });
+    } catch (error: any) {
         return next(new ErrorHandler(error.message, 400));
-       }
+    }
 });
