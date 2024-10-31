@@ -33,16 +33,13 @@ interface CustomJwtPayload extends JwtPayload {
 //     next();
 // });
 
-
 export const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
     const token = req.cookies["access_token"];
 
-    // If no token, proceed to logout without blocking
     if (!token && req.path === "/logout") {
         return next();
     }
 
-    // Normal authentication logic for other routes
     if (!token) {
         return res.status(401).json({
             success: false,
@@ -51,8 +48,18 @@ export const isAuthenticated = (req: Request, res: Response, next: NextFunction)
     }
 
     try {
-        const decodedData = jwt.verify(token, process.env.JWT_SECRET as string);
-        // req.user = decodedData;
+        const decodedData = jwt.verify(token, process.env.JWT_SECRET as string) as CustomJwtPayload;
+        
+        // Use type assertion to tell TypeScript that req has a user property
+        (req as any).user = decodedData; 
+
+        const userId = decodedData.id || '';
+        redis.del(userId);
+
+        // Continue with Redis or other logic 
+
+          
+
         next();
     } catch (error) {
         return res.status(401).json({
@@ -61,3 +68,17 @@ export const isAuthenticated = (req: Request, res: Response, next: NextFunction)
         });
     }
 };
+
+
+export const authorizeRoles = (...roles: string[]) => {
+    return (req: Request, res: Response, next: NextFunction) => {
+        if (!roles.includes((req as any).user?.role || '')) {
+            return next(
+                new ErrorHandler(
+                    `Role (${(req as any).user?.role}) is not allowed to access this resource.`, 403
+                )
+            );
+        }
+        next();
+    };
+}
