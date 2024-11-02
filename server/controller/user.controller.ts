@@ -1,14 +1,14 @@
 import express, { Request, Response, NextFunction } from "express";
-
 import userModel, { IUser } from "../models/user.model";
 import { catchAsyncError } from "../middleware/catchAsyncError";
 import ErrorHandler from "../utils/ErrorHandler";
-import jwt from "jsonwebtoken";
+import jwt, { JwtPayload } from 'jsonwebtoken';
 import ejs from "ejs";
 import path from "path";
 import sendMail from "../utils/sendMail";
 import dotenv from "dotenv";
 import { sendToken } from "../utils/jwt";
+import {redis} from "../utils/redis";  
 dotenv.config();
 
 interface IRegistrationBody {
@@ -16,57 +16,40 @@ interface IRegistrationBody {
     email: string;
     password?: string;
     avatar?: string;
-    
 }
+
 export const registerationUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+    const { name, email } = req.body;
+    const isEmailExist = await userModel.findOne({ email });
+
+    if (isEmailExist) {
+        return next(new ErrorHandler("Email already exists", 400));
+    }
+
+    const user: IRegistrationBody = { name, email };
+
+    const activationToken = createActivationToken(user);
+
+    const activationLink = `${process.env.ORIGIN}/activate?token=${activationToken.token}`;
+    const data = { user: { name: user.name }, activationCode: activationToken.activationCode, activationLink };
+
+    const html = await ejs.renderFile(path.join(__dirname, "../mail/activation-mail.ejs"), data);
+
     try {
-        const { name, email } = req.body; // Removed password from here
-        const isEmailExist = await userModel.findOne({ email });
+        await sendMail({
+            email: user.email,
+            subject: "Account Activation",
+            template: "activation-mail.ejs",
+            data,
+        });
 
-        if (isEmailExist) {
-            return next(new ErrorHandler("Email is already exist", 400));
-        }
-
-        const user: IRegistrationBody = {
-            name,
-            email,
-        };
-
-        // Create activation token
-        const activationToken = createActivationToken(user);
-
-        // Create the activation link
-        const activationLink = `${process.env.ORIGIN}/activate?token=${activationToken.token}`;
-
-        // Prepare the email data including activation link
-        const data = {
-            user: { name: user.name },
-            activationCode: activationToken.activationCode,
-            activationLink,
-        };
-
-        // Render the email template with the activation link
-        const html = await ejs.renderFile(path.join(__dirname, "../mail/activation-mail.ejs"), data);
-
-        try {
-            // Send the activation email
-            await sendMail({
-                email: user.email,
-                subject: "Account Activation",
-                template: "activation-mail.ejs",
-                data,
-            });
-
-            res.status(201).json({
-                success: true,
-                message: "Account registered successfully. Please check your email to activate your account",
-                activationToken: activationToken.token,
-            });
-        } catch (error: any) {
-            return next(new ErrorHandler(error.message, 400));
-        }
+        res.status(201).json({
+            success: true,
+            message: "Account registered successfully. Please check your email to activate your account",
+            activationToken: activationToken.token,
+        });
     } catch (error: any) {
-        return next(new ErrorHandler(error.message, 500));
+        return next(new ErrorHandler(error.message, 400));
     }
 });
 
@@ -76,8 +59,6 @@ interface IActivationToken {
 }
 
 export const createActivationToken = (user: any): IActivationToken => {
-    console.log("ACTIVATION_SECRET:", process.env.ACTIVATION_SECRET); 
-    
     const activationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     if (!process.env.ACTIVATION_SECRET) {
@@ -91,125 +72,143 @@ export const createActivationToken = (user: any): IActivationToken => {
     );
 
     return { token, activationCode };
-}
+};
 
-// Activate user 
-interface IActivationRequest{
-    activation_token:string,
-    activation_code:string,
-
+interface IActivationRequest {
+    activation_token: string;
+    activation_code: string;
 }
 export const activateUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const { activation_code, activation_token } = req.body as IActivationRequest;
+    const { activation_code, activation_token } = req.body as IActivationRequest;
 
+    try {
         // Verify the activation token
-        const newUser = jwt.verify(
+        const decoded = jwt.verify(
             activation_token,
             process.env.ACTIVATION_SECRET as string
-        ) as { user: IUser; activationCode: string };
+        ) as JwtPayload;
 
         // Check if the activation code matches
-        if (newUser.activationCode !== activation_code) {
+        if (decoded.activationCode !== activation_code) {
             return next(new ErrorHandler("Invalid activation code", 400));
         }
 
-        const { name, email } = newUser.user; // Omit password and avatar here
-        const existUser = await userModel.findOne({ email });
-
-        if (existUser) {
-            return next(new ErrorHandler("Email already exists.", 400));
+        // Check if the user already exists in the database
+        const existingUser = await userModel.findOne({ email: decoded.user.email });
+        if (existingUser) {
+            return next(new ErrorHandler("User with this email already activated", 400));
         }
 
-        // Create new user in the database without password and avatar
-        const user = await userModel.create({
-            name,
-            email,
-            // No password or avatar fields included
+        // Create a new user in the database
+        const newUser = new userModel({
+            name: decoded.user.name,
+            email: decoded.user.email,
+            password: req.body.password, // Ensure password is hashed in user model's pre-save hook
+            avatar: req.body.avatar || ""
         });
 
-        res.status(201).json({
-            success: true,
-            message: "User activated successfully.",
-        });
+        await newUser.save();
 
-    } catch (error: any) {
-        return next(new ErrorHandler(error.message, 500));
+        // Optionally, remove the activation token from Redis or invalidate it here if used
+
+        // Send a token or response to confirm activation success
+        sendToken(newUser, 201, res);
+
+    } catch (error) {
+        if (error instanceof jwt.JsonWebTokenError) {
+            return next(new ErrorHandler("Invalid or expired activation token", 400));
+        }
+        next(error);
     }
 });
 
-//Login user
+
 interface ILoginRequest {
-    email:string;
-    password:string;
+    email: string;
+    password: string;
 }
 
-
 export const loginUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
-   try {
-       const { email, password } = req.body as ILoginRequest;
-       
-       if (!email || !password) {
+    const { email, password } = req.body as ILoginRequest;
+
+    if (!email || !password) {
         return next(new ErrorHandler("Please enter email and password", 400));
     }
 
     const user = await userModel.findOne({ email }).select("+password");
 
-    if (!user) {
+    if (!user || !(await user.comparePassword(password))) {
         return next(new ErrorHandler("Invalid email or password", 401));
     }
 
-    const isPasswordMatched = await user.comparePassword(password);
-
-    if (!isPasswordMatched) {
-        return next(new ErrorHandler("Invalid email or password", 401));
-    }
-      
     sendToken(user, 200, res);
-
-
-   } catch (error:any) {
-    return next(new ErrorHandler(error.message, 400));
-   }
 });
 
+export const logoutUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+    res.cookie("access_token", "", {
+        httpOnly: true,
+        expires: new Date(0),
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
+    });
 
-// export const logoutUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => { 
-//      try {
-//           res.cookie("access token success", " ", {maxAge:1});
-//           res.cookie("refresh token success", " ", {maxAge:1});
-//             res.status(200).json({
-//                 success:true,
-//                 message:"Logged out successfully"});
-//      } catch (error:any) {
-//         return next(new ErrorHandler(error.message, 400));
-//        }
-// });
+    res.cookie("refresh_token", "", {
+        httpOnly: true,
+        expires: new Date(0),
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
+    });
 
+    res.status(200).json({
+        success: true,
+        message: "Logged out successfully",
+    });
+});
 
-export const logoutUser = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => { 
-    try {
-        // Clear access token cookie
-        res.cookie("access_token", "", { 
-            httpOnly: true,
-            expires: new Date(0),  // Expire immediately
-            sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production'  // Secure flag for production
-        });
+export const updateAccessToken = catchAsyncError(async (req: Request, res: Response, next: NextFunction) => {
+    const refreshToken = req.cookies.refresh_token;
 
-        // Clear refresh token cookie
-        res.cookie("refresh_token", "", { 
-            httpOnly: true,
-            expires: new Date(0),  // Expire immediately
-            sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production'  // Secure flag for production
-        });
-
-        res.status(200).json({
-            success: true,
-            message: "Logged out successfully"
-        });
-    } catch (error: any) {
-        return next(new ErrorHandler(error.message, 400));
+    if (!refreshToken) {
+        return next(new ErrorHandler("Please login to access this resource", 401));
     }
+
+    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET as string) as JwtPayload;
+
+    if (!decoded || !decoded.id) {
+        return next(new ErrorHandler("Could not refresh the token", 400));
+    }
+
+    const session = await redis.get(decoded.id);
+
+    if (!session) {
+        return next(new ErrorHandler("Session expired or invalid", 400));
+    }
+
+    const user = JSON.parse(session);
+    const accessToken = jwt.sign({ id: user._id }, process.env.ACCESS_TOKEN_SECRET as string, {
+        expiresIn: "5m",
+    });
+
+    const newRefreshToken = jwt.sign({ id: user._id }, process.env.REFRESH_TOKEN_SECRET as string, {
+        expiresIn: "3d",
+    });
+
+    res.cookie("access_token", accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 5 * 60 * 1000 // 5 minutes
+    });
+
+    res.cookie("refresh_token", newRefreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 3 * 24 * 60 * 60 * 1000 // 3 days
+    });
+
+    res.status(200).json({
+        success: true,
+        accessToken,
+    });
 });
